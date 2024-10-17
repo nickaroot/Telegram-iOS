@@ -293,7 +293,7 @@ func _internal_parseInputInvoice(transaction: Transaction, source: BotPaymentInv
             }
         }
         
-        let inputPurpose: Api.InputStorePaymentPurpose = .inputStorePaymentPremiumGiftCode(flags: 0, users: inputUsers, boostPeer: nil, currency: currency, amount: amount)
+        let inputPurpose: Api.InputStorePaymentPurpose = .inputStorePaymentPremiumGiftCode(flags: 0, users: inputUsers, boostPeer: nil, currency: currency, amount: amount, message: nil)
         
         var flags: Int32 = 0
         if let _ = option.storeProductId {
@@ -588,6 +588,7 @@ public enum SendBotPaymentFormError {
     case precheckoutFailed
     case paymentFailed
     case alreadyPaid
+    case starGiftOutOfStock
 }
 
 public enum SendBotPaymentResult {

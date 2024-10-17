@@ -680,22 +680,6 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
     override public var visibility: ListViewItemNodeVisibility {
         didSet {
             if self.visibility != oldValue {
-                for contentNode in self.contentNodes {
-                    contentNode.visibility = mapVisibility(self.visibility, boundsSize: self.bounds.size, insets: self.insets, to: contentNode)
-                }
-                
-                if let threadInfoNode = self.threadInfoNode {
-                    threadInfoNode.visibility = self.visibility != .none
-                }
-                
-                if let replyInfoNode = self.replyInfoNode {
-                    replyInfoNode.visibility = self.visibility != .none
-                }
-                
-                if let unlockButtonNode = self.unlockButtonNode {
-                    unlockButtonNode.visibility = self.visibility != .none
-                }
-                
                 self.visibilityStatus = self.visibility != .none
                 
                 self.updateVisibility()
@@ -717,6 +701,8 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
             }
         }
     }
+    
+    private var forceStopAnimations: Bool = false
     
     required public init(rotated: Bool) {
         self.mainContextSourceNode = ContextExtractedContentContainingNode()
@@ -6207,12 +6193,44 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         return false
     }
     
+    override public func updateStickerSettings(forceStopAnimations: Bool) {
+        self.forceStopAnimations = forceStopAnimations
+        self.updateVisibility()
+    }
+    
     private func updateVisibility() {
         guard let item = self.item else {
             return
         }
         
+        let effectiveMediaVisibility = self.visibility
+        
         var isPlaying = true
+        if !item.controllerInteraction.canReadHistory {
+            isPlaying = false
+        }
+        
+        if self.forceStopAnimations {
+            isPlaying = false
+        }
+        
+        if !isPlaying {
+            self.removeEffectAnimations()
+        }
+        
+        var effectiveVisibility = self.visibility
+        if !isPlaying {
+            effectiveVisibility = .none
+        }
+        
+        for contentNode in self.contentNodes {
+            if contentNode is ChatMessageMediaBubbleContentNode || contentNode is ChatMessageGiftBubbleContentNode {
+                contentNode.visibility = mapVisibility(effectiveMediaVisibility, boundsSize: self.bounds.size, insets: self.insets, to: contentNode)
+            } else {
+                contentNode.visibility = mapVisibility(effectiveVisibility, boundsSize: self.bounds.size, insets: self.insets, to: contentNode)
+            }
+        }
+        
         if case let .visible(_, subRect) = self.visibility {
             if subRect.minY > 32.0 {
                 isPlaying = false
@@ -6220,12 +6238,17 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         } else {
             isPlaying = false
         }
-        if !item.controllerInteraction.canReadHistory {
-            isPlaying = false
+        
+        if let threadInfoNode = self.threadInfoNode {
+            threadInfoNode.visibility = effectiveVisibility != .none
         }
         
-        if !isPlaying {
-            self.removeEffectAnimations()
+        if let replyInfoNode = self.replyInfoNode {
+            replyInfoNode.visibility = effectiveVisibility != .none
+        }
+        
+        if let unlockButtonNode = self.unlockButtonNode {
+            unlockButtonNode.visibility = effectiveVisibility != .none
         }
         
         if isPlaying {

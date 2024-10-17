@@ -11,6 +11,7 @@ import AccountContext
 import PhotoResources
 import UIKitRuntimeUtils
 import RangeSet
+import VideoToolbox
 
 private extension CGRect {
     var center: CGPoint {
@@ -24,6 +25,11 @@ public enum NativeVideoContentId: Hashable {
     case contextResult(Int64, String)
     case profileVideo(Int64, String?)
 }
+
+private let isAv1Supported: Bool = {
+    let value = VTIsHardwareDecodeSupported(kCMVideoCodecType_AV1)
+    return value
+}()
 
 public final class NativeVideoContent: UniversalVideoContent {
     public let id: AnyHashable
@@ -58,7 +64,17 @@ public final class NativeVideoContent: UniversalVideoContent {
     let hasSentFramesToDisplay: (() -> Void)?
     
     public static func isVideoCodecSupported(videoCodec: String) -> Bool {
-        return videoCodec == "h264" || videoCodec == "h265" || videoCodec == "avc" || videoCodec == "hevc"
+        if videoCodec == "h264" || videoCodec == "h265" || videoCodec == "avc" || videoCodec == "hevc" {
+            return true
+        }
+        
+        if videoCodec == "av1" {
+            if isAv1Supported {
+                return true
+            }
+        }
+        
+        return false
     }
     
     public static func isHLSVideo(file: TelegramMediaFile) -> Bool {
@@ -206,6 +222,10 @@ private final class NativeVideoContentNode: ASDisplayNode, UniversalVideoContent
         return self._bufferingStatus.get()
     }
     
+    var isNativePictureInPictureActive: Signal<Bool, NoError> {
+        return .single(false)
+    }
+    
     private let _ready = Promise<Void>()
     var ready: Signal<Void, NoError> {
         return self._ready.get()
@@ -217,7 +237,7 @@ private final class NativeVideoContentNode: ASDisplayNode, UniversalVideoContent
     private var dimensions: CGSize?
     private let dimensionsPromise = ValuePromise<CGSize>(CGSize())
     
-    private var validLayout: CGSize?
+    private var validLayout: (size: CGSize, actualSize: CGSize)?
     
     private var shouldPlay: Bool = false
     
@@ -306,8 +326,8 @@ private final class NativeVideoContentNode: ASDisplayNode, UniversalVideoContent
                         if let dimensions = getSize() {
                             strongSelf.dimensions = dimensions
                             strongSelf.dimensionsPromise.set(dimensions)
-                            if let size = strongSelf.validLayout {
-                                strongSelf.updateLayout(size: size, transition: .immediate)
+                            if let validLayout = strongSelf.validLayout {
+                                strongSelf.updateLayout(size: validLayout.size, actualSize: validLayout.actualSize, transition: .immediate)
                             }
                         }
                     }
@@ -432,8 +452,8 @@ private final class NativeVideoContentNode: ASDisplayNode, UniversalVideoContent
         }
     }
     
-    func updateLayout(size: CGSize, transition: ContainedViewLayoutTransition) {
-        self.validLayout = size
+    func updateLayout(size: CGSize, actualSize: CGSize, transition: ContainedViewLayoutTransition) {
+        self.validLayout = (size, actualSize)
         
         if let dimensions = self.dimensions {
             let imageSize = CGSize(width: floor(dimensions.width / 2.0), height: floor(dimensions.height / 2.0))
@@ -684,5 +704,12 @@ private final class NativeVideoContentNode: ASDisplayNode, UniversalVideoContent
 
     func setCanPlaybackWithoutHierarchy(_ canPlaybackWithoutHierarchy: Bool) {
         self.playerNode.setCanPlaybackWithoutHierarchy(canPlaybackWithoutHierarchy)
+    }
+    
+    func enterNativePictureInPicture() -> Bool {
+        return false
+    }
+    
+    func exitNativePictureInPicture() {
     }
 }
